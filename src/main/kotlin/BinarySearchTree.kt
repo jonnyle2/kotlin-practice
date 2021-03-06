@@ -27,18 +27,23 @@ class BinarySearchTree<E: Comparable<E>>(c: Collection<E> = emptyList()): Mutabl
     override val size: Int
         get() = _size
 
-    override fun contains(element: E): Boolean {
+    private fun search(element: E): Node<E>? {
         var node = root
         while(node != null) {
             with(node) {
                 node = when {
-                    key == element -> return true
+                    key == element -> return this
                     key > element -> l
                     else -> r
                 }
             }
         }
-        return false
+        return null
+    }
+
+    override fun contains(element: E): Boolean {
+        search(element) ?: return false
+        return true
     }
 
     override fun containsAll(elements: Collection<E>) = elements.all { contains(it) }
@@ -75,7 +80,33 @@ class BinarySearchTree<E: Comparable<E>>(c: Collection<E> = emptyList()): Mutabl
     }
 
     override fun iterator(): MutableIterator<E> {
-        TODO("Not yet implemented")
+        return object : MutableIterator<E> {
+            val stack = Stack<Node<E>>()
+            var last: Node<E>? = null
+            init {
+                var node = root
+                while(node != null) {
+                    stack.push(node)
+                    node = node.l
+                }
+            }
+
+            override fun hasNext() = stack.size > 0
+
+            override fun next(): E {
+                last = stack.pop()
+                var node = last?.r
+                while(node != null) {
+                    stack.push(node)
+                    node = node?.l
+                }
+                return last?.key ?: throw Exception()
+            }
+
+            override fun remove() {
+                remove(last?.key)
+            }
+        }
     }
 
     override fun remove(element: E): Boolean {
@@ -84,17 +115,50 @@ class BinarySearchTree<E: Comparable<E>>(c: Collection<E> = emptyList()): Mutabl
          * appropriately as its parent's parent (grandparent's) left or right child.
          * ~sounds kind of weird
          */
-        fun transplant(parent: Node<E>, child: Node<E>) {
-            if()
+        fun transplant(parent: Node<E>?, child: Node<E>?) {
+            when {
+                parent?.p == null -> root = child
+                parent.p?.l == parent -> parent.p?.l = child
+                else -> parent.p?.r = child
+            }
+            child?.p = parent?.p
         }
+
+        val node = search(element) ?: return false
+        when {
+            node.l == null -> transplant(node, node.r)
+            node.r == null -> transplant(node, node.l)
+            else -> {
+                var leftChild = node.r
+                while(leftChild?.l != null) {
+                    leftChild = leftChild.l
+                }
+                if(leftChild?.p != node) {
+                    transplant(leftChild, leftChild?.r)
+                    leftChild?.r = node.r
+                    leftChild?.r?.p = leftChild
+                }
+                transplant(node, leftChild)
+                leftChild?.l = node.l
+                leftChild?.l?.p = leftChild
+            }
+        }
+        _size--
+        return true
     }
 
-    override fun removeAll(elements: Collection<E>): Boolean {
-        TODO("Not yet implemented")
-    }
+    override fun removeAll(elements: Collection<E>) = elements.map { remove(it) }.any { it }
 
     override fun retainAll(elements: Collection<E>): Boolean {
-        TODO("Not yet implemented")
+        var changed = false
+        with(iterator()) {
+            while(hasNext())
+                if(!elements.contains(next())) {
+                    remove()
+                    changed = true
+            }
+        }
+        return changed
     }
 
     fun printInOrder() {
@@ -166,10 +230,7 @@ class BinarySearchTree<E: Comparable<E>>(c: Collection<E> = emptyList()): Mutabl
 fun main() {
     val list = listOf(2, 5, 7, 6, 5, 8)
     val bst = BinarySearchTree(list)
-    bst.printPreorder()
-    bst.printPostorder()
     bst.printInOrder()
-    bst.printBreadthFirst()
-    println("Min: ${bst.minOrNull()}")
-    println("Max: ${bst.maxOrNull()}")
+    bst.retainAll(listOf(2, 4, 5, 8))
+    bst.printInOrder()
 }
